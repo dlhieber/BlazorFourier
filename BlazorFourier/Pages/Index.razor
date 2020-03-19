@@ -1,0 +1,56 @@
+﻿@page "/"
+@using System.IO;
+@using Blazor.FileReader;
+@inject IFileReaderService fileReader;
+@using Blazor.Extensions.Canvas.Canvas2D;
+@using Blazor.Extensions.Canvas;
+<h1>Upload Image to Perform Fourier Transform</h1>
+
+Welcome to your new app.
+@if (!string.IsNullOrWhiteSpace(message))
+{
+    <div class="alert alert-success">
+        File: @message is loaded
+    </div>
+}
+<input type="file" @ref="ogImg" @onchange="OpenFileAsync" />
+
+<BECanvas Width="300" Height="400" @ref="previewCanvas"></BECanvas>
+
+@code{
+    //need to commit
+    ElementReference ogImg;
+    string message = string.Empty;
+    string imagePath = null;
+    IFileInfo fileInfo;
+    IFileReference ogFileRef;
+
+    private Canvas2DContext _context;
+
+    protected Blazor.Extensions.BECanvasComponent previewCanvas;
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+
+        this._context =   await Blazor.Extensions.CanvasContextExtensions.CreateCanvas2DAsync(previewCanvas);
+      
+        await this._context.SetFillStyleAsync("green");
+
+        await this._context.FillRectAsync(10, 100, 100, 100);
+
+        await this._context.SetFontAsync("48px serif");
+        await this._context.StrokeTextAsync("Hello Blazor!!!", 10, 100);
+    }
+
+    async Task OpenFileAsync()
+    {
+        ogFileRef = (await fileReader.CreateReference(ogImg).EnumerateFilesAsync()).FirstOrDefault();
+        
+        if (ogFileRef == null)
+            return;
+
+        fileInfo = await ogFileRef.ReadFileInfoAsync();
+
+        message = fileInfo.Name;
+    }
+}
