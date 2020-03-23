@@ -1,0 +1,31 @@
+﻿@using Blazor.Extensions.Canvas.Canvas2D;
+@using Blazor.Extensions.Canvas;
+
+
+    <BECanvas Width=@canWidth Height=@canHeight @ref="ogImgCan"></BECanvas>
+
+    <BECanvas Width=@canWidth Height=@canHeight @ref="transCan"></BECanvas>
+@code {
+    [Parameter]
+    public int canWidth { get; set; }
+    [Parameter]
+    public int canHeight { get; set; }
+    
+
+    private Canvas2DContext _context;
+    protected Blazor.Extensions.BECanvasComponent ogImgCan;
+    protected Blazor.Extensions.BECanvasComponent transCan;
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+
+        this._context = await Blazor.Extensions.CanvasContextExtensions.CreateCanvas2DAsync(ogImgCan);
+
+        await this._context.SetFillStyleAsync("green");
+
+        await this._context.FillRectAsync(10, 100, 100, 100);
+
+        await this._context.SetFontAsync("48px serif");
+        await this._context.StrokeTextAsync("Hello Blazor!!!", 10, 100);
+    }
+
+}
