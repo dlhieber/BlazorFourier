@@ -1,38 +1,14 @@
 ﻿@page "/"
-@using System.IO;
-@using Blazor.FileReader;
+
 @using SixLabors.ImageSharp;
-@inject IFileReaderService fileReader;
+@using SixLabors.ImageSharp.PixelFormats;
+@using SixLabors.ImageSharp.Processing
+
 
 <h1>Upload Image to Perform Fourier Transform</h1>
 
 Welcome to your new app.
 
-<input type="file" @ref="ogImg" @onchange="OpenFileAsync" />
+
 
 <FourierBECanvas canHeight="200" canWidth="200" />
-
-@code{
-
-    ElementReference ogImg;
-
-    IFileInfo fileInfo;
-    IFileReference ogFileRef;
-
-
-
-    async Task OpenFileAsync()
-    {
-        ogFileRef = (await fileReader.CreateReference(ogImg).EnumerateFilesAsync()).FirstOrDefault();
-
-        if (ogFileRef == null)
-            return;
-
-        fileInfo = await ogFileRef.ReadFileInfoAsync();
-        var imageMemoryStream= await ogFileRef.CreateMemoryStreamAsync();
-    
-
-
-       
-    }
-}

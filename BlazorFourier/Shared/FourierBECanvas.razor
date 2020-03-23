@@ -1,31 +1,67 @@
 ﻿@using Blazor.Extensions.Canvas.Canvas2D;
 @using Blazor.Extensions.Canvas;
+@using Blazor.FileReader;
+@using SixLabors.ImageSharp;
+@using SixLabors.ImageSharp.PixelFormats;
+@using SixLabors.ImageSharp.Processing
+@inject IFileReaderService fileReader;
 
+<BECanvas Width=@canWidth Height=@canHeight @ref="ogImgCan"></BECanvas>
 
-    <BECanvas Width=@canWidth Height=@canHeight @ref="ogImgCan"></BECanvas>
-
-    <BECanvas Width=@canWidth Height=@canHeight @ref="transCan"></BECanvas>
-@code {
+<BECanvas Width=@canWidth Height=@canHeight @ref="transCan"></BECanvas>
+<input type="file" @ref="ogImg" @onchange="OpenFileAsync" />
+<p class="alert-secondary">@debug</p>
+@code{
     [Parameter]
     public int canWidth { get; set; }
     [Parameter]
     public int canHeight { get; set; }
-    
 
-    private Canvas2DContext _context;
+    ElementReference ogImg;
+    IFileInfo fileInfo;
+    IFileReference ogFileRef;
+    string debug = "";
+
+    private Canvas2DContext ogContext;
+    private Canvas2DContext transContext;
     protected Blazor.Extensions.BECanvasComponent ogImgCan;
     protected Blazor.Extensions.BECanvasComponent transCan;
+
+    async Task OpenFileAsync()
+    {
+        ogFileRef = (await fileReader.CreateReference(ogImg).EnumerateFilesAsync()).FirstOrDefault();
+
+        if (ogFileRef == null)
+            return;
+
+        fileInfo = await ogFileRef.ReadFileInfoAsync();
+        var imageMemoryStream = await ogFileRef.CreateMemoryStreamAsync();
+
+        var image = Image<Rgba32>.Load(imageMemoryStream);
+        Image<Rgba32> outputImage = new Image<Rgba32>(150, 150);
+        outputImage.Mutate(o => o.DrawImage(image, 1f));
+        debug = outputImage[0, 0].R.ToString();
+        /*
+                var image = Image<Rgba32>.LoadPixelData(imageMemoryStream.ToArray(),imageInfo.Bounds().Width, imageInfo.Bounds().Height);
+        */
+        await this.transContext.SetStrokeStyleAsync("0 0 0");
+        await this.transContext.SetFillStyleAsync("rgb(20,30,200)");
+        await this.transContext.FillRectAsync(0,0,100,100);
+    }
+
+
     protected override async Task OnAfterRenderAsync(bool firstRender)
     {
 
-        this._context = await Blazor.Extensions.CanvasContextExtensions.CreateCanvas2DAsync(ogImgCan);
+        this.ogContext = await Blazor.Extensions.CanvasContextExtensions.CreateCanvas2DAsync(ogImgCan);
+        this.transContext = await Blazor.Extensions.CanvasContextExtensions.CreateCanvas2DAsync(transCan);
 
-        await this._context.SetFillStyleAsync("green");
+        await this.ogContext.SetFillStyleAsync("green");
 
-        await this._context.FillRectAsync(10, 100, 100, 100);
+        await this.ogContext.FillRectAsync(10, 100, 100, 100);
 
-        await this._context.SetFontAsync("48px serif");
-        await this._context.StrokeTextAsync("Hello Blazor!!!", 10, 100);
+        await this.ogContext.SetFontAsync("48px serif");
+        await this.ogContext.StrokeTextAsync("Hello Blazor!!!", 10, 100);
     }
 
 }
