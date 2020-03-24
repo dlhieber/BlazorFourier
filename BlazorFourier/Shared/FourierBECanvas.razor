@@ -4,7 +4,8 @@
 @using SixLabors.ImageSharp;
 @using SixLabors.ImageSharp.PixelFormats;
 @using SixLabors.ImageSharp.Advanced;
-@using SixLabors.ImageSharp.Processing
+@using SixLabors.ImageSharp.Processing;
+@using Meta.Numerics.Matrices;
 @inject IFileReaderService fileReader;
 
 <img src="@imageDataAsBase64" />
@@ -23,6 +24,17 @@
     string debug = "";
     Image<Rgba32> convertedImage;
 
+    protected struct RGBAMatrix
+    {
+        public RectangularMatrix R;
+        public RectangularMatrix G;
+        public RectangularMatrix B;
+        public RectangularMatrix A;
+    }
+    protected enum Channel
+    {
+        R,G,B,A
+    }
     async Task OpenFileAsync()
     {
         ogFileRef = (await fileReader.CreateReference(ogImg).EnumerateFilesAsync()).FirstOrDefault();
@@ -34,7 +46,7 @@
         var imageMemoryStream = await ogFileRef.CreateMemoryStreamAsync();
 
 
-        var image =/*(Image<Rgba32>)*/ Image<Rgba32>.Load(imageMemoryStream);
+        var image = Image<Rgba32>.Load(imageMemoryStream);
 
         debug = fileInfo.Type;
 
@@ -56,37 +68,59 @@
 
     protected void PeformFFT(Image<Rgba32> image)
     {
-        Span<Rgba32> spanRGBA;
-        List<int> R, B, G, A;
+        RGBAMatrix matrices = new RGBAMatrix();
+        matrices.R = getChannelMatrix(image, Channel.R);
+        matrices.G = getChannelMatrix(image, Channel.G);
+        matrices.B = getChannelMatrix(image, Channel.B);
+        matrices.A = getChannelMatrix(image, Channel.A);
+    }
+    protected RectangularMatrix getChannelMatrix(Image<Rgba32> image, Channel channel)
+    {
 
-        debug = "\n";
+        Span<Rgba32> spanRGBA;
+        List<double> channelPixels;
+        List<List<double>> rowsofchannelPixels= new List<List<double>>();
+
+        Meta.Numerics.SignalProcessing.FourierTransformer ft;
+
+        debug += "\n";
         for (int row = 0; row < image.Height; row++)
         {
-            R = new List<int>();
-            B = new List<int>();
-            G = new List<int>();
-            A = new List<int>();
+            channelPixels = new List<double>();
+
 
             spanRGBA = image.GetPixelRowSpan<Rgba32>(row);
             for (int i = 0; i < spanRGBA.Length; i++)
             {
-                R.Add((int)spanRGBA[i].R);
-                G.Add((int)spanRGBA[i].G);
-                B.Add((int)spanRGBA[i].B);
-                A.Add((int)spanRGBA[i].A);
-                debug += R[i] + " ";
+                switch (channel)
+                {
+                    case Channel.R:
+                        channelPixels.Add((double)spanRGBA[i].R);
+                        break;
+                    case Channel.G:
+                        channelPixels.Add((double)spanRGBA[i].G);
+                        break;
+                    case Channel.B:
+                        channelPixels.Add((double)spanRGBA[i].B);
+                        break;
+                    case Channel.A:
+                        channelPixels.Add((double)spanRGBA[i].A);
+                        break;
+                    default:
+                        throw new ArgumentException("Invalid Channel Type");
+                }
+                
+                debug += channelPixels[i] + " ";
             }
             debug += "\n";
-
-
+            rowsofchannelPixels.Add(channelPixels);
 
         }
 
+
+        return null;
     }
 
-    protected override async Task OnAfterRenderAsync(bool firstRender)
-    {
 
-    }
 
 }
