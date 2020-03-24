@@ -3,24 +3,26 @@
 @using Blazor.FileReader;
 @using SixLabors.ImageSharp;
 @using SixLabors.ImageSharp.PixelFormats;
+@using SixLabors.ImageSharp.Advanced;
 @using SixLabors.ImageSharp.Processing
 @inject IFileReaderService fileReader;
 
-<img src="@imageData" />
-<input type="file" @ref="ogImg" @onchange="OpenFileAsync" />
-@*<input type="button" @onclick="PeformFFT" title="FFT" value="Perform FFT" />*@
+<img src="@imageDataAsBase64" />
+<img src="@fourierimageDataAsBase64"/>
+<input type="file" @ref="ogImg" @onchange="OpenFileAsync" accept=".png,.jpg,.jpeg,.gif"  />
+<input type="button" @onclick="FFTCallback" title="FFT" value="Perform FFT" />
 
 <p class="alert-secondary">@debug</p>
 @code{
 
-    string imageData = String.Empty;
-
+    string imageDataAsBase64 = String.Empty;
+    string fourierimageDataAsBase64 = String.Empty;
     protected ElementReference ogImg;
     protected IFileInfo fileInfo;
     protected IFileReference ogFileRef;
     string debug = "";
+    Image<Rgba32> convertedImage;
 
-  
     async Task OpenFileAsync()
     {
         ogFileRef = (await fileReader.CreateReference(ogImg).EnumerateFilesAsync()).FirstOrDefault();
@@ -35,21 +37,52 @@
         var image =/*(Image<Rgba32>)*/ Image<Rgba32>.Load(imageMemoryStream);
 
         debug = fileInfo.Type;
-        
-        imageData = $"data:{fileInfo.Type};base64,{Convert.ToBase64String(imageMemoryStream.ToArray())}";
 
-        var convertedImage = image.CloneAs<Rgba32>();
-       
+        imageDataAsBase64 = $"data:{fileInfo.Type};base64,{Convert.ToBase64String(imageMemoryStream.ToArray())}";
+
+        convertedImage= image.CloneAs<Rgba32>();
+
 
 
     }
 
-    /*   protected async Task PeformFFT()
-       {
+    protected void FFTCallback()
+    {
+        if (!String.IsNullOrEmpty(imageDataAsBase64))
+        {
+            PeformFFT(convertedImage);
+        }
+    }
 
-       }*/
+    protected void PeformFFT(Image<Rgba32> image)
+    {
+        Span<Rgba32> spanRGBA;
+        List<int> R, B, G, A;
+
+        debug = "\n";
+        for (int row = 0; row < image.Height; row++)
+        {
+            R = new List<int>();
+            B = new List<int>();
+            G = new List<int>();
+            A = new List<int>();
+
+            spanRGBA = image.GetPixelRowSpan<Rgba32>(row);
+            for (int i = 0; i < spanRGBA.Length; i++)
+            {
+                R.Add((int)spanRGBA[i].R);
+                G.Add((int)spanRGBA[i].G);
+                B.Add((int)spanRGBA[i].B);
+                A.Add((int)spanRGBA[i].A);
+                debug += R[i] + " ";
+            }
+            debug += "\n";
 
 
+
+        }
+
+    }
 
     protected override async Task OnAfterRenderAsync(bool firstRender)
     {
