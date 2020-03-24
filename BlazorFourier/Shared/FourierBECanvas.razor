@@ -6,27 +6,21 @@
 @using SixLabors.ImageSharp.Processing
 @inject IFileReaderService fileReader;
 
-<BECanvas Width=@canWidth Height=@canHeight @ref="ogImgCan"></BECanvas>
-
-<BECanvas Width=@canWidth Height=@canHeight @ref="transCan"></BECanvas>
+<img src="@imageData" />
 <input type="file" @ref="ogImg" @onchange="OpenFileAsync" />
+@*<input type="button" @onclick="PeformFFT" title="FFT" value="Perform FFT" />*@
+
 <p class="alert-secondary">@debug</p>
 @code{
-    [Parameter]
-    public int canWidth { get; set; }
-    [Parameter]
-    public int canHeight { get; set; }
 
-    ElementReference ogImg;
-    IFileInfo fileInfo;
-    IFileReference ogFileRef;
+    string imageData = String.Empty;
+
+    protected ElementReference ogImg;
+    protected IFileInfo fileInfo;
+    protected IFileReference ogFileRef;
     string debug = "";
 
-    private Canvas2DContext ogContext;
-    private Canvas2DContext transContext;
-    protected Blazor.Extensions.BECanvasComponent ogImgCan;
-    protected Blazor.Extensions.BECanvasComponent transCan;
-
+  
     async Task OpenFileAsync()
     {
         ogFileRef = (await fileReader.CreateReference(ogImg).EnumerateFilesAsync()).FirstOrDefault();
@@ -37,31 +31,29 @@
         fileInfo = await ogFileRef.ReadFileInfoAsync();
         var imageMemoryStream = await ogFileRef.CreateMemoryStreamAsync();
 
-        var image = Image<Rgba32>.Load(imageMemoryStream);
-        Image<Rgba32> outputImage = new Image<Rgba32>(150, 150);
-        outputImage.Mutate(o => o.DrawImage(image, 1f));
-        debug = outputImage[0, 0].R.ToString();
-        /*
-                var image = Image<Rgba32>.LoadPixelData(imageMemoryStream.ToArray(),imageInfo.Bounds().Width, imageInfo.Bounds().Height);
-        */
-        await this.transContext.SetStrokeStyleAsync("0 0 0");
-        await this.transContext.SetFillStyleAsync("rgb(20,30,200)");
-        await this.transContext.FillRectAsync(0,0,100,100);
+
+        var image =/*(Image<Rgba32>)*/ Image<Rgba32>.Load(imageMemoryStream);
+
+        debug = fileInfo.Type;
+        
+        imageData = $"data:{fileInfo.Type};base64,{Convert.ToBase64String(imageMemoryStream.ToArray())}";
+
+        var convertedImage = image.CloneAs<Rgba32>();
+       
+
+
     }
+
+    /*   protected async Task PeformFFT()
+       {
+
+       }*/
+
 
 
     protected override async Task OnAfterRenderAsync(bool firstRender)
     {
 
-        this.ogContext = await Blazor.Extensions.CanvasContextExtensions.CreateCanvas2DAsync(ogImgCan);
-        this.transContext = await Blazor.Extensions.CanvasContextExtensions.CreateCanvas2DAsync(transCan);
-
-        await this.ogContext.SetFillStyleAsync("green");
-
-        await this.ogContext.FillRectAsync(10, 100, 100, 100);
-
-        await this.ogContext.SetFontAsync("48px serif");
-        await this.ogContext.StrokeTextAsync("Hello Blazor!!!", 10, 100);
     }
 
 }
