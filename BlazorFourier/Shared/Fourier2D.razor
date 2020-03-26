@@ -15,12 +15,14 @@
 <input type="file" @ref="ogImg" @onchange="OpenFileAsync" accept=".png,.jpg,.jpeg,.gif"  />
 <input type="button" @onclick="FFTCallback" title="FFT" value="Perform FFT" />
 
-<p class="alert-secondary">@debug</p>
+<p class="alert-secondary" @ref="loadingText">@debug</p>
+
+
 @code{
 
     string imageDataAsBase64 = String.Empty;
     string fourierimageDataAsBase64 = String.Empty;
-    protected ElementReference ogImg;
+    protected ElementReference ogImg, loadingText;
     protected IFileInfo fileInfo;
     protected IFileReference ogFileRef;
     string debug = "";
@@ -49,15 +51,32 @@
 
 
         var image = Image<Rgba32>.Load(imageMemoryStream);
+        System.IO.MemoryStream resizedStream = new System.IO.MemoryStream();
 
+        if (image.Height != image.Width)
+        {
+
+            if(image.Height > image.Width)
+            {
+                image.Mutate(x => x.Resize(image.Width, image.Width));
+            }
+            else
+            {
+                image.Mutate(x => x.Resize(image.Height, image.Height));
+            }
+
+        }
+
+        image.SaveAsPng(resizedStream);
         debug = fileInfo.Type;
 
-        imageDataAsBase64 = $"data:{fileInfo.Type};base64,{Convert.ToBase64String(imageMemoryStream.ToArray())}";
+        imageDataAsBase64 = $"data:png;base64,{Convert.ToBase64String(resizedStream.ToArray())}";
 
         convertedImage= image.CloneAs<Rgba32>();
 
 
-
+        imageMemoryStream.Close();
+        resizedStream.Close();
     }
 
     protected void FFTCallback()
@@ -72,14 +91,40 @@
             matrices.B = getChannelMatrix(convertedImage, Channel.B);
             matrices.A = getChannelMatrix(convertedImage, Channel.A);
 
-            Peform2DFFT(matrices.R);
+            Fmatrices.R= Peform2DFFT(matrices.R);
+            Fmatrices.G = Peform2DFFT(matrices.G);
+            Fmatrices.B = Peform2DFFT(matrices.B);
+
+            drawFourierImage(Fmatrices);
         }
     }
 
+    protected void drawFourierImage(RGBAMatrix matrix)
+    {
+        Image<Rgba32> FImage = new Image<Rgba32>(convertedImage.Width, convertedImage.Height);
+
+        var Rmax =  matrix.R.MaxNorm();
+        var Gmax =  matrix.G.MaxNorm();
+        var Bmax =  matrix.B.MaxNorm();
+
+        for (int row = 0; row < matrix.R.RowCount; row++)
+        {
+            for (int col = 0; col < matrix.R.ColumnCount; col++)
+            {
+                FImage[col, row] = new Rgba32( (float) (matrix.R[row,col]/Rmax)*255f,
+                                               (float)(matrix.G[row, col] / Gmax) * 255f,
+                                               (float)(matrix.B[row, col] / Bmax) * 255f, 255f);
+
+            }
+        }
+        System.IO.MemoryStream FourierStream = new System.IO.MemoryStream();
+        FImage.SaveAsPng(FourierStream);
+        fourierimageDataAsBase64= $"data:png;base64,{Convert.ToBase64String(FourierStream.ToArray())}";
+    }
     protected RectangularMatrix Peform2DFFT(RectangularMatrix input)
     {
-        FourierTransformer rowFT = new FourierTransformer(input.ColumnCount);
-        FourierTransformer colFT = new FourierTransformer(input.RowCount);
+        FourierTransformer rowFT = new FourierTransformer(input.ColumnCount,FourierSign.Negative,FourierNormalization.Unitary);
+        FourierTransformer colFT = new FourierTransformer(input.RowCount, FourierSign.Negative, FourierNormalization.Unitary);
         RectangularMatrix output = new RectangularMatrix(input.RowCount, input.ColumnCount);
 
         List<List<Meta.Numerics.Complex>> initComplexMatrix =new List<List<Meta.Numerics.Complex>>(input.RowCount);
@@ -91,17 +136,14 @@
         for (int row = 0; row < input.RowCount; row++)
         {
             complexRow = new List<Meta.Numerics.Complex>(input.ColumnCount);
-
-
             foreach (double num in input.Row(row).ToArray())
             {
                 complexRow.Add(new Meta.Numerics.Complex(num, 0));
             }
-
             initComplexMatrix.Add(complexRow);
         }
 
-        debug += "Finished Conversion";
+
 
 
         //Prep intermediate matrix
@@ -122,21 +164,20 @@
                 intermediateComplexMatrix[col].Add(transformedRow[col]);
             }
         }
-        debug += "Finished Row Transform";
+
 
         //Perform Col FFT and move the real part into output matrix
         for (int col = 0; col < input.ColumnCount; col++)
         {
             var transformedCol = colFT.Transform(intermediateComplexMatrix[col]);
 
+
             for (int row = 0; row < input.ColumnCount; row++)
             {
-                output[row, col] = transformedCol[row].Re;
-                debug += output[row, col];
+                output[row, col] = Math.Abs(transformedCol[row].Re);
+                //       debug += output[row, col]+" ";
             }
         }
-        debug += "Finished Column Transform";
-
 
         return output;
     }
@@ -144,8 +185,7 @@
     {
 
         Span<Rgba32> spanRGBA;
-        double [,] matrix =new double[image.Height, image.Width];/*
-        Meta.Numerics.Complex[,] initComplexMatrix = new Meta.Numerics.Complex()[image.Height, image.Width];*/
+        double [,] matrix =new double[image.Height, image.Width];
 
         for (int row = 0; row < image.Height; row++)
         {
@@ -170,7 +210,7 @@
                         throw new ArgumentException("Invalid Channel Type");
                 }
 
-                //      debug += matrix[col, row] +" ";
+                //        debug += Math.Round(matrix[col, row]) +" ";
             }
             // debug += "\n";
 
