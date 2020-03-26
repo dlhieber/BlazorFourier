@@ -1,4 +1,5 @@
-﻿@using Blazor.Extensions.Canvas.Canvas2D;
+﻿@*Leaving Blazor extension canvas in as it may be useful to draw masks for an inverse FFT*@
+@using Blazor.Extensions.Canvas.Canvas2D;
 @using Blazor.Extensions.Canvas;
 @using Blazor.FileReader;
 @using SixLabors.ImageSharp;
@@ -10,9 +11,11 @@
 
 @inject IFileReaderService fileReader;
 
+@*Improvement:
+  Better formatting for the compenent*@
 <img src="@imageDataAsBase64" />
 <img src="@fourierimageDataAsBase64"/>
-<input type="file" @ref="ogImg" @onchange="OpenFileAsync" accept=".png,.jpg,.jpeg,.gif"  />
+<input type="file" @ref="originalFileInputReference" @onchange="OpenFileAsync" accept=".png,.jpg,.jpeg,.gif"  />
 <input type="button" @onclick="FFTCallback" title="FFT" value="Perform FFT" />
 
 <p class="alert-secondary" @ref="loadingText">@debug</p>
@@ -22,7 +25,7 @@
 
     string imageDataAsBase64 = String.Empty;
     string fourierimageDataAsBase64 = String.Empty;
-    protected ElementReference ogImg, loadingText;
+    protected ElementReference originalFileInputReference, loadingText;
     protected IFileInfo fileInfo;
     protected IFileReference originalFileReference;
     string debug = "";
@@ -47,7 +50,7 @@
 
     async Task OpenFileAsync()
     {
-        originalFileReference = (await fileReader.CreateReference(ogImg).EnumerateFilesAsync()).FirstOrDefault();
+        originalFileReference = (await fileReader.CreateReference(originalFileInputReference).EnumerateFilesAsync()).FirstOrDefault();
         if (originalFileReference == null)
             return;
 
@@ -95,6 +98,10 @@
 
     protected void FFTCallback()
     {
+        /*
+        * Improvement to be made:
+        * As stated in another comment, there is probably a better way of selecting which specific channel to transform
+        */
         if (!String.IsNullOrEmpty(imageDataAsBase64))
         {
 
@@ -189,7 +196,7 @@
             for (int row = 0; row < input.ColumnCount; row++)
             {
                 output[row, col] = Math.Abs(transformedCol[row].Re);
-               
+
             }
         }
 
@@ -197,7 +204,7 @@
     }
     protected RectangularMatrix getChannelMatrix(Image<Rgba32> image, Channel channel)
     {
-         
+
         Span<Rgba32> spanRGBA;
         double [,] matrix =new double[image.Height, image.Width];
 
@@ -225,7 +232,7 @@
                 }
 
             }
-     
+
 
         }
 
