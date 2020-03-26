@@ -1,0 +1,186 @@
+﻿@using Blazor.Extensions.Canvas.Canvas2D;
+@using Blazor.Extensions.Canvas;
+@using Blazor.FileReader;
+@using SixLabors.ImageSharp;
+@using SixLabors.ImageSharp.PixelFormats;
+@using SixLabors.ImageSharp.Advanced;
+@using SixLabors.ImageSharp.Processing;
+@using Meta.Numerics.Matrices;
+@using Meta.Numerics.SignalProcessing;
+
+@inject IFileReaderService fileReader;
+
+<img src="@imageDataAsBase64" />
+<img src="@fourierimageDataAsBase64"/>
+<input type="file" @ref="ogImg" @onchange="OpenFileAsync" accept=".png,.jpg,.jpeg,.gif"  />
+<input type="button" @onclick="FFTCallback" title="FFT" value="Perform FFT" />
+
+<p class="alert-secondary">@debug</p>
+@code{
+
+    string imageDataAsBase64 = String.Empty;
+    string fourierimageDataAsBase64 = String.Empty;
+    protected ElementReference ogImg;
+    protected IFileInfo fileInfo;
+    protected IFileReference ogFileRef;
+    string debug = "";
+    Image<Rgba32> convertedImage;
+
+    protected struct RGBAMatrix
+    {
+        public RectangularMatrix R;
+        public RectangularMatrix G;
+        public RectangularMatrix B;
+        public RectangularMatrix A;
+    }
+    protected enum Channel
+    {
+        R,G,B,A
+    }
+    async Task OpenFileAsync()
+    {
+        ogFileRef = (await fileReader.CreateReference(ogImg).EnumerateFilesAsync()).FirstOrDefault();
+
+        if (ogFileRef == null)
+            return;
+
+        fileInfo = await ogFileRef.ReadFileInfoAsync();
+        var imageMemoryStream = await ogFileRef.CreateMemoryStreamAsync();
+
+
+        var image = Image<Rgba32>.Load(imageMemoryStream);
+
+        debug = fileInfo.Type;
+
+        imageDataAsBase64 = $"data:{fileInfo.Type};base64,{Convert.ToBase64String(imageMemoryStream.ToArray())}";
+
+        convertedImage= image.CloneAs<Rgba32>();
+
+
+
+    }
+
+    protected void FFTCallback()
+    {
+        if (!String.IsNullOrEmpty(imageDataAsBase64))
+        {
+
+            RGBAMatrix matrices = new RGBAMatrix();
+            RGBAMatrix Fmatrices = new RGBAMatrix();
+            matrices.R = getChannelMatrix(convertedImage, Channel.R);
+            matrices.G = getChannelMatrix(convertedImage, Channel.G);
+            matrices.B = getChannelMatrix(convertedImage, Channel.B);
+            matrices.A = getChannelMatrix(convertedImage, Channel.A);
+
+            Peform2DFFT(matrices.R);
+        }
+    }
+
+    protected RectangularMatrix Peform2DFFT(RectangularMatrix input)
+    {
+        FourierTransformer rowFT = new FourierTransformer(input.ColumnCount);
+        FourierTransformer colFT = new FourierTransformer(input.RowCount);
+        RectangularMatrix output = new RectangularMatrix(input.RowCount, input.ColumnCount);
+
+        List<List<Meta.Numerics.Complex>> initComplexMatrix =new List<List<Meta.Numerics.Complex>>(input.RowCount);
+        List<List<Meta.Numerics.Complex>> intermediateComplexMatrix = new List<List<Meta.Numerics.Complex>>(input.ColumnCount);
+        List<Meta.Numerics.Complex> complexRow;
+
+        debug += "We initialized stuff";
+        //convert to proper format for transformation
+        for (int row = 0; row < input.RowCount; row++)
+        {
+            complexRow = new List<Meta.Numerics.Complex>(input.ColumnCount);
+
+
+            foreach (double num in input.Row(row).ToArray())
+            {
+                complexRow.Add(new Meta.Numerics.Complex(num, 0));
+            }
+
+            initComplexMatrix.Add(complexRow);
+        }
+
+        debug += "Finished Conversion";
+
+
+        //Prep intermediate matrix
+        for (int col=0; col<input.ColumnCount;col++)
+        {
+            var emptyRow = new List<Meta.Numerics.Complex>(input.RowCount);
+            intermediateComplexMatrix.Add(emptyRow);
+        }
+
+        //Perform Row FFT and Move into intermediate list for Column Transform
+        for (int row = 0; row < input.RowCount; row++)
+        {
+            var transformedRow = rowFT.Transform(initComplexMatrix[row]);
+
+
+            for (int col = 0; col < input.ColumnCount; col++)
+            {
+                intermediateComplexMatrix[col].Add(transformedRow[col]);
+            }
+        }
+        debug += "Finished Row Transform";
+
+        //Perform Col FFT and move the real part into output matrix
+        for (int col = 0; col < input.ColumnCount; col++)
+        {
+            var transformedCol = colFT.Transform(intermediateComplexMatrix[col]);
+
+            for (int row = 0; row < input.ColumnCount; row++)
+            {
+                output[row, col] = transformedCol[row].Re;
+                debug += output[row, col];
+            }
+        }
+        debug += "Finished Column Transform";
+
+
+        return output;
+    }
+    protected RectangularMatrix getChannelMatrix(Image<Rgba32> image, Channel channel)
+    {
+
+        Span<Rgba32> spanRGBA;
+        double [,] matrix =new double[image.Height, image.Width];/*
+        Meta.Numerics.Complex[,] initComplexMatrix = new Meta.Numerics.Complex()[image.Height, image.Width];*/
+
+        for (int row = 0; row < image.Height; row++)
+        {
+            spanRGBA = image.GetPixelRowSpan<Rgba32>(row);
+            for (int col = 0; col < spanRGBA.Length; col++)
+            {
+                switch (channel)
+                {
+                    case Channel.R:
+                        matrix[col,row]=(double)spanRGBA[col].R;
+                        break;
+                    case Channel.G:
+                        matrix[col,row]=(double)spanRGBA[col].G;
+                        break;
+                    case Channel.B:
+                        matrix[col,row]=(double)spanRGBA[col].B;
+                        break;
+                    case Channel.A:
+                        matrix[col,row]=(double)spanRGBA[col].A;
+                        break;
+                    default:
+                        throw new ArgumentException("Invalid Channel Type");
+                }
+
+                //      debug += matrix[col, row] +" ";
+            }
+            // debug += "\n";
+
+        }
+
+        RectangularMatrix rectMatrix = new RectangularMatrix(matrix);
+
+        return rectMatrix;
+    }
+
+
+
+}
