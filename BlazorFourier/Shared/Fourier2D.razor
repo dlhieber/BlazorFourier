@@ -24,10 +24,15 @@
     string fourierimageDataAsBase64 = String.Empty;
     protected ElementReference ogImg, loadingText;
     protected IFileInfo fileInfo;
-    protected IFileReference ogFileRef;
+    protected IFileReference originalFileReference;
     string debug = "";
     Image<Rgba32> convertedImage;
 
+    /**
+     * Improvement to be made:
+     * Used this struc to select channels. I understand there's probably a better waying using typedef 
+     * and checking which property to select
+     */
     protected struct RGBAMatrix
     {
         public RectangularMatrix R;
@@ -39,20 +44,25 @@
     {
         R,G,B,A
     }
+
     async Task OpenFileAsync()
     {
-        ogFileRef = (await fileReader.CreateReference(ogImg).EnumerateFilesAsync()).FirstOrDefault();
-
-        if (ogFileRef == null)
+        originalFileReference = (await fileReader.CreateReference(ogImg).EnumerateFilesAsync()).FirstOrDefault();
+        if (originalFileReference == null)
             return;
 
-        fileInfo = await ogFileRef.ReadFileInfoAsync();
-        var imageMemoryStream = await ogFileRef.CreateMemoryStreamAsync();
+        fileInfo = await originalFileReference.ReadFileInfoAsync();
+        var imageMemoryStream = await originalFileReference.CreateMemoryStreamAsync();
 
 
         var image = Image<Rgba32>.Load(imageMemoryStream);
         System.IO.MemoryStream resizedStream = new System.IO.MemoryStream();
 
+
+        /* Improvement to be made:
+         * Rectangular images should work, but until I fix the bug in the fourier code, I'm just forcing a square image
+         *  for now
+         */
         if (image.Height != image.Width)
         {
 
@@ -69,7 +79,11 @@
 
         image.SaveAsPng(resizedStream);
         debug = fileInfo.Type;
-
+        /*
+         * Improvement to be made:
+         * There's probably a better way to load images in dynamically, but for now I found this example, and while slow,
+         * it does work (png is also faster than jpg as far as I have noticed)
+         */
         imageDataAsBase64 = $"data:png;base64,{Convert.ToBase64String(resizedStream.ToArray())}";
 
         convertedImage= image.CloneAs<Rgba32>();
@@ -111,7 +125,8 @@
         {
             for (int col = 0; col < matrix.R.ColumnCount; col++)
             {
-                FImage[col, row] = new Rgba32( (float) (matrix.R[row,col]/Rmax)*255f,
+                FImage[(col+ convertedImage.Width/2) % convertedImage.Width, (row+convertedImage.Height/2)% convertedImage.Height] =
+                    new Rgba32( (float) (matrix.R[row,col]/Rmax)*255f,
                                                (float)(matrix.G[row, col] / Gmax) * 255f,
                                                (float)(matrix.B[row, col] / Bmax) * 255f, 255f);
 
@@ -131,7 +146,6 @@
         List<List<Meta.Numerics.Complex>> intermediateComplexMatrix = new List<List<Meta.Numerics.Complex>>(input.ColumnCount);
         List<Meta.Numerics.Complex> complexRow;
 
-        debug += "We initialized stuff";
         //convert to proper format for transformation
         for (int row = 0; row < input.RowCount; row++)
         {
@@ -175,7 +189,7 @@
             for (int row = 0; row < input.ColumnCount; row++)
             {
                 output[row, col] = Math.Abs(transformedCol[row].Re);
-                //       debug += output[row, col]+" ";
+               
             }
         }
 
@@ -210,9 +224,8 @@
                         throw new ArgumentException("Invalid Channel Type");
                 }
 
-                //        debug += Math.Round(matrix[col, row]) +" ";
             }
-            // debug += "\n";
+     
 
         }
 
