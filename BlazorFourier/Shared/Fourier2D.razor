@@ -9,23 +9,55 @@
 @using Meta.Numerics.Matrices;
 @using Meta.Numerics.SignalProcessing;
 
+@inject IJSRuntime JSRuntime;
+
 @inject IFileReaderService fileReader;
-
 @*Improvement:
-  Better formatting for the compenent*@
-<img src="@imageDataAsBase64" />
-<img src="@fourierimageDataAsBase64"/>
-<input type="file" @ref="originalFileInputReference" @onchange="OpenFileAsync" accept=".png,.jpg,.jpeg,.gif"  />
-<input type="button" @onclick="FFTCallback" title="FFT" value="Perform FFT" />
+    Better formatting for the compenent*@
+<div class="container-fluid">
+    <div class="row">
+        <div class="col-md-6">
+            <img src="@imageDataAsBase64" />
+            <div class="spinner-border @fileSelectSpinner" role="status">
+                <span class="sr-only">Loading...</span>
+            </div>
+        </div>
+        <div class="col-md-6">
 
-@*<p class="alert-secondary" @ref="loadingText">@debug</p>*@
+            <img src="@fourierimageDataAsBase64" />
+        </div>
+    </div>
+    <div class="row">
+        <div class="col-md-6">
+            <input class="custom-file" type="file" @ref="originalFileInputReference" @onchange="OpenFileAsync" accept=".png,.jpg,.jpeg,.gif" />
+        </div>
+    </div>
+    <div class="row">
+        <div class="col-md-6">
+            <input class="btn btn-info" type="button" @onclick="FFTCallback" title="FFT" value="Perform FFT" />
+
+        </div>
+        <div class="col-md-2">
+            <div id="loadingSpinner" class="spinner-border @fourierSpinner" role="status">
+                <span class="sr-only">Loading...</span>
+            </div>
+        </div>
+        <div class="col-md-4">
+            <p id="loadingSpinnerText" class="text-body @fourierSpinner">@FTLoadingText</p>
+        </div>
+    </div>
+</div>
+
 
 
 @code{
 
     string imageDataAsBase64 = String.Empty;
     string fourierimageDataAsBase64 = String.Empty;
-    protected ElementReference originalFileInputReference, loadingText;
+    string FTLoadingText = String.Empty;
+    string fileSelectSpinner = "invisible";
+    string fourierSpinner = "invisible";
+    protected ElementReference originalFileInputReference;
     protected IFileInfo fileInfo;
     protected IFileReference originalFileReference;
     string debug = "";
@@ -33,7 +65,7 @@
 
     /**
      * Improvement to be made:
-     * Used this struc to select channels. I understand there's probably a better waying using typedef 
+     * Used this struc to select channels. I understand there's probably a better waying using typedef
      * and checking which property to select
      */
     protected struct RGBAMatrix
@@ -45,11 +77,13 @@
     }
     protected enum Channel
     {
-        R,G,B,A
+        R, G, B, A
     }
 
     async Task OpenFileAsync()
     {
+        fileSelectSpinner = "visible";
+
         originalFileReference = (await fileReader.CreateReference(originalFileInputReference).EnumerateFilesAsync()).FirstOrDefault();
         if (originalFileReference == null)
             return;
@@ -69,7 +103,7 @@
         if (image.Height != image.Width)
         {
 
-            if(image.Height > image.Width)
+            if (image.Height > image.Width)
             {
                 image.Mutate(x => x.Resize(image.Width, image.Width));
             }
@@ -87,16 +121,18 @@
          * There's probably a better way to load images in dynamically, but for now I found this example, and while slow,
          * it does work (png is also faster than jpg as far as I have noticed)
          */
+
         imageDataAsBase64 = $"data:png;base64,{Convert.ToBase64String(resizedStream.ToArray())}";
 
-        convertedImage= image.CloneAs<Rgba32>();
+        convertedImage = image.CloneAs<Rgba32>();
 
 
         imageMemoryStream.Close();
         resizedStream.Close();
+        fileSelectSpinner = "invisible";
     }
 
-    protected void FFTCallback()
+    async protected void FFTCallback()
     {
         /*
         * Improvement to be made:
@@ -104,36 +140,50 @@
         */
         if (!String.IsNullOrEmpty(imageDataAsBase64))
         {
+            //Hacky way to update the text, because I was having trouble doing Blazor way...
+            /*
+            await JSRuntime.InvokeVoidAsync("document.querySelector(#\"loadingSpinner\").classList.add(\"visible\")");
 
+            await JSRuntime.InvokeVoidAsync("document.querySelector(#\"loadingSpinnerText\").innerHTML=\"Seperating Channels...\"");*/
+            await JSRuntime.InvokeVoidAsync("updateFTLoadingText");
+            this.StateHasChanged();
             RGBAMatrix matrices = new RGBAMatrix();
             RGBAMatrix Fmatrices = new RGBAMatrix();
             matrices.R = getChannelMatrix(convertedImage, Channel.R);
             matrices.G = getChannelMatrix(convertedImage, Channel.G);
             matrices.B = getChannelMatrix(convertedImage, Channel.B);
             matrices.A = getChannelMatrix(convertedImage, Channel.A);
-
-            Fmatrices.R= Peform2DFFT(matrices.R);
+            FTLoadingText = "Performing Red Transform...";
+            StateHasChanged();
+            Fmatrices.R = Peform2DFFT(matrices.R);
+            FTLoadingText = "Performing Gree Transform...";
             Fmatrices.G = Peform2DFFT(matrices.G);
+            StateHasChanged();
+            FTLoadingText = "Performing Blue Transform...";
             Fmatrices.B = Peform2DFFT(matrices.B);
+            StateHasChanged();
 
+            FTLoadingText = "Drawing Fourier Image...";
             drawFourierImage(Fmatrices);
+            fourierSpinner = "invisible";
         }
     }
+
 
     protected void drawFourierImage(RGBAMatrix matrix)
     {
         Image<Rgba32> FImage = new Image<Rgba32>(convertedImage.Width, convertedImage.Height);
 
-        var Rmax =  matrix.R.MaxNorm();
-        var Gmax =  matrix.G.MaxNorm();
-        var Bmax =  matrix.B.MaxNorm();
+        var Rmax = matrix.R.MaxNorm();
+        var Gmax = matrix.G.MaxNorm();
+        var Bmax = matrix.B.MaxNorm();
 
         for (int row = 0; row < matrix.R.RowCount; row++)
         {
             for (int col = 0; col < matrix.R.ColumnCount; col++)
             {
-                FImage[(col+ convertedImage.Width/2) % convertedImage.Width, (row+convertedImage.Height/2)% convertedImage.Height] =
-                    new Rgba32( (float) (matrix.R[row,col]/Rmax)*255f,
+                FImage[(col + convertedImage.Width / 2) % convertedImage.Width, (row + convertedImage.Height / 2) % convertedImage.Height] =
+                    new Rgba32((float)(matrix.R[row, col] / Rmax) * 255f,
                                                (float)(matrix.G[row, col] / Gmax) * 255f,
                                                (float)(matrix.B[row, col] / Bmax) * 255f, 255f);
 
@@ -141,15 +191,15 @@
         }
         System.IO.MemoryStream FourierStream = new System.IO.MemoryStream();
         FImage.SaveAsPng(FourierStream);
-        fourierimageDataAsBase64= $"data:png;base64,{Convert.ToBase64String(FourierStream.ToArray())}";
+        fourierimageDataAsBase64 = $"data:png;base64,{Convert.ToBase64String(FourierStream.ToArray())}";
     }
     protected RectangularMatrix Peform2DFFT(RectangularMatrix input)
     {
-        FourierTransformer rowFT = new FourierTransformer(input.ColumnCount,FourierSign.Negative,FourierNormalization.Unitary);
+        FourierTransformer rowFT = new FourierTransformer(input.ColumnCount, FourierSign.Negative, FourierNormalization.Unitary);
         FourierTransformer colFT = new FourierTransformer(input.RowCount, FourierSign.Negative, FourierNormalization.Unitary);
         RectangularMatrix output = new RectangularMatrix(input.RowCount, input.ColumnCount);
 
-        List<List<Meta.Numerics.Complex>> initComplexMatrix =new List<List<Meta.Numerics.Complex>>(input.RowCount);
+        List<List<Meta.Numerics.Complex>> initComplexMatrix = new List<List<Meta.Numerics.Complex>>(input.RowCount);
         List<List<Meta.Numerics.Complex>> intermediateComplexMatrix = new List<List<Meta.Numerics.Complex>>(input.ColumnCount);
         List<Meta.Numerics.Complex> complexRow;
 
@@ -168,7 +218,7 @@
 
 
         //Prep intermediate matrix
-        for (int col=0; col<input.ColumnCount;col++)
+        for (int col = 0; col < input.ColumnCount; col++)
         {
             var emptyRow = new List<Meta.Numerics.Complex>(input.RowCount);
             intermediateComplexMatrix.Add(emptyRow);
@@ -206,7 +256,7 @@
     {
 
         Span<Rgba32> spanRGBA;
-        double [,] matrix =new double[image.Height, image.Width];
+        double[,] matrix = new double[image.Height, image.Width];
 
         for (int row = 0; row < image.Height; row++)
         {
@@ -216,16 +266,16 @@
                 switch (channel)
                 {
                     case Channel.R:
-                        matrix[col,row]=(double)spanRGBA[col].R;
+                        matrix[col, row] = (double)spanRGBA[col].R;
                         break;
                     case Channel.G:
-                        matrix[col,row]=(double)spanRGBA[col].G;
+                        matrix[col, row] = (double)spanRGBA[col].G;
                         break;
                     case Channel.B:
-                        matrix[col,row]=(double)spanRGBA[col].B;
+                        matrix[col, row] = (double)spanRGBA[col].B;
                         break;
                     case Channel.A:
-                        matrix[col,row]=(double)spanRGBA[col].A;
+                        matrix[col, row] = (double)spanRGBA[col].A;
                         break;
                     default:
                         throw new ArgumentException("Invalid Channel Type");
