@@ -31,10 +31,13 @@
         <div class="col-md-6">
             <input class="custom-file" type="file" @ref="originalFileInputReference" @onchange="OpenFileAsync" accept=".png,.jpg,.jpeg,.gif" />
         </div>
+        <div class="col-md-6">
+            @*<input class="btn btn-info @showSave" type="button" @onclick="saveFTImage" value="Save FT Image"/>*@
+        </div>
     </div>
     <div class="row">
         <div class="col-md-6">
-            <input class="btn btn-info" type="button" @onclick="FFTCallback" title="FFT" value="Perform FFT" />
+            <input class="btn btn-info " type="button" @onclick="FFTCallback" title="FFT" value=@FTLoadingText />
 
         </div>
         <div class="col-md-2">
@@ -43,7 +46,7 @@
             </div>
         </div>
         <div class="col-md-4">
-            <p id="loadingSpinnerText" class="text-body @fourierSpinner">@FTLoadingText</p>
+            <p id="loadingSpinnerText" class="text-body @fourierSpinner"></p>
         </div>
     </div>
 </div>
@@ -54,9 +57,10 @@
 
     string imageDataAsBase64 = String.Empty;
     string fourierimageDataAsBase64 = String.Empty;
-    string FTLoadingText = String.Empty;
+    string FTLoadingText = "Perform FFT (may take some time)";
     string fileSelectSpinner = "invisible";
     string fourierSpinner = "invisible";
+    string showSave = "invisible";
     protected ElementReference originalFileInputReference;
     protected IFileInfo fileInfo;
     protected IFileReference originalFileReference;
@@ -130,6 +134,11 @@
         imageMemoryStream.Close();
         resizedStream.Close();
         fileSelectSpinner = "invisible";
+
+    }
+    async protected void saveFTImage()
+    {
+
     }
 
     async protected void FFTCallback()
@@ -137,15 +146,17 @@
         /*
         * Improvement to be made:
         * As stated in another comment, there is probably a better way of selecting which specific channel to transform
+        * Also I can't seem to get the UI to update the loading spinner for the 
         */
         if (!String.IsNullOrEmpty(imageDataAsBase64))
         {
-            //Hacky way to update the text, because I was having trouble doing Blazor way...
+            //An attempt to show the spinner, because I was having trouble doing Blazor way... but still didn't work
             /*
             await JSRuntime.InvokeVoidAsync("document.querySelector(#\"loadingSpinner\").classList.add(\"visible\")");
 
             await JSRuntime.InvokeVoidAsync("document.querySelector(#\"loadingSpinnerText\").innerHTML=\"Seperating Channels...\"");*/
-            await JSRuntime.InvokeVoidAsync("updateFTLoadingText");
+
+            fourierSpinner = "visible";
             this.StateHasChanged();
             RGBAMatrix matrices = new RGBAMatrix();
             RGBAMatrix Fmatrices = new RGBAMatrix();
@@ -166,6 +177,8 @@
             FTLoadingText = "Drawing Fourier Image...";
             drawFourierImage(Fmatrices);
             fourierSpinner = "invisible";
+            FTLoadingText = "Perform FFT (may take some time)";
+            showSave = "visible";
         }
     }
 
